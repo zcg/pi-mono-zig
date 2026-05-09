@@ -592,7 +592,7 @@ fn extractSelectedTextFromItems(
         item_row += entry_rows;
     }
 
-    try extractSelectedText(allocator, &scratch, 0, visible_height, selection, output);
+    try extractSelectedText(allocator, &scratch, src_start, visible_height, selection, output);
 }
 
 fn isCellSelected(row: usize, col: usize, sel: SelectionRange) bool {
@@ -619,10 +619,20 @@ fn extractSelectedText(
         const col_start: usize = if (abs_row == selection.start_row) selection.start_col else 0;
         const col_end: usize = if (abs_row == selection.end_row) @min(selection.end_col, @as(usize, cols)) else @as(usize, cols);
         var trailing_space: usize = 0;
+        var skip_next: bool = false;
         for (col_start..col_end) |col| {
             const cell = source.readCell(@intCast(col), @intCast(abs_row)) orelse continue;
+            if (skip_next) {
+                skip_next = false;
+                continue;
+            }
             const grapheme = cell.char.grapheme;
-            if (grapheme.len == 0 or (grapheme.len == 1 and grapheme[0] == ' ')) {
+            if (cell.char.width > 1) {
+                for (0..trailing_space) |_| try output.append(allocator, ' ');
+                trailing_space = 0;
+                try output.appendSlice(allocator, grapheme);
+                skip_next = true;
+            } else if (grapheme.len == 0 or (grapheme.len == 1 and grapheme[0] == ' ')) {
                 trailing_space += 1;
             } else {
                 for (0..trailing_space) |_| try output.append(allocator, ' ');
